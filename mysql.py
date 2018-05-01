@@ -206,7 +206,7 @@ class StockDayTableData(StockMysqlDB):
         if not exist:
             #create unexist table
             self._execute('''create table if not exists %s( \
-            %s varchar(7) not null comment "tradetime", \
+            %s timestamp not null comment "tradetime", \
             %s varchar(8) default 0 comment "tradeprice", \
             %s varchar(8) default 0 comment "upprice", \
             %s varchar(8) default 0 comment "volumn", \
@@ -243,8 +243,6 @@ class StockDayTableData(StockMysqlDB):
 #            ))
 #        
         
-##获取一条
-#r = c.fetchone()
 if __name__=="__main__":
 #    stockdb_single_ins = StockMysqlDB(host="localhost",db="sina_data")
 #    bb = stockdb_single_ins.select(tablename="ad",fields=("adid","remark"),limitnum=3,wheredict={"sort":12})
@@ -254,6 +252,28 @@ if __name__=="__main__":
 #        print(x)
 #    dd = stockdb_single_ins._insert2(tablename="person",name="zhanll",age=10)
     #dd = stockdb_single_ins._insert2(tablename="person",**{"name":"zhanll","age":"10"})
-    sst = StockDayTableData("0002347sh")
-    dd = pd.read_hdf("sh600513.hdf5","2018-01-29"+"/"+"2")
-    sst.insertDataFrame(dataframe=dd)
+    
+    
+    import h5py as hp
+    
+    tablename = "sh600513"
+    sst = StockDayTableData(tablename = tablename)
+    def readdays(tablename):
+        with hp.File("../%s.hdf5"%(tablename),"r+") as f:
+            return [{day:list(f[day].keys())} for day in f.keys()]
+    
+    days_pages = readdays(tablename)
+    for daydict in days_pages:
+        day = list(daydict.keys())[0]
+        pages = list(daydict.values())[0]
+        
+        for page in pages:
+            dataframe = pd.read_hdf("../%s.hdf5"%tablename,"%s/%s"%(day,page))
+            dataframe["成交时间"]=dataframe["成交时间"].apply(lambda x:day+" "+x)
+            sst.insertDataFrame(dataframe=dataframe)
+        
+#    dataframe = pd.read_hdf("sh600513.hdf5","2018-01-29"+"/"+"2")
+#    
+#    transdataframe = pd.read_hdf("%s.hdf5"%tablename,"%s/%s"%(day,page))
+#
+#    sst.insertDataFrame(dataframe=dataframe)

@@ -1,0 +1,2 @@
+# dataframe2mysql
+由pandas生成dataframe,并通过中间件传入到mysql数据库中

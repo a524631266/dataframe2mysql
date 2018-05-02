@@ -16,7 +16,7 @@ def ping(func):
     
     def warp(self,*args,**kwargs):     
         self.conn.ping()
-        print("11111")
+#        print("11111")
         return func(self,*args,*kwargs)
     return warp
 
@@ -40,6 +40,20 @@ class BaseDB:
     def dbcur(self):
         raise NotImplementedError
     
+    def _add_field(self,tablename=None,fieldslist=[]):
+        tablename = tablename or self.__tablename__
+        if fieldslist and tablename:
+            for field in fieldslist:
+                print(fieldslist)
+                if (field == "page"):
+                    fieldtype = "smallint"
+                else:
+                    fieldtype = "varchar"
+                sql_statement = "alter table %s add %s %s default Null;" %(self.escape(tablename),field,fieldtype)
+                print(sql_statement)
+                self._execute(sql_statement)
+                print("alter %s"%fieldtype)
+        
     def _execute(self,sql_statement,paralist=None):
         """
         其中dbcur是迭代器对象，本身实现__iter__方法
@@ -64,10 +78,10 @@ class BaseDB:
             dbcur = self._execute("show tables")
             
             if (tablename.lower(),) in dbcur:
-                print("exist the table %s"%tablename)
+#                print("exist the table %s"%tablename)
                 return True
             else:
-                print("don't exist the table %s"%tablename)
+#                print("don't exist the table %s"%tablename)
                 return False
         
     def _select2dict(self,tablename=None,fields="*",where=None,offset=0,limitnum=None):
@@ -140,7 +154,7 @@ class BaseDB:
 #        logger.debug("<sql: %s>", sql_query)
 
         if values:
-            dbcur = self._execute(sql_query, list(itervalues(values)))
+            dbcur = self._execute(sql_query, [list(itervalues(values))])
         else:
             dbcur = self._execute(sql_query)
         return dbcur.lastrowid
@@ -173,24 +187,13 @@ class StockMysqlDB(BaseDB):
         _columnames = self._getFields(tablename=tablename)
         
         _notcontain_name_list = [name for name in dataframe.columns if name not in _columnames]
-        print(_columnames)
-        print(_notcontain_name_list)
+#        print(_columnames)
+#        print(_notcontain_name_list)
+        self._add_field(tablename=tablename,fieldslist=_notcontain_name_list)
+        
+        
         self._insertDataFrame(tablename=tablename,data=dataframe)
         
-#value=[]
-#c.execute('''CREATE TABLE IF NOT EXISTS `engine_cost2` (
-#  `engine_name` varchar(64) NOT NULL,
-#  `device_type` int(11) NOT NULL,d
-#  `cost_name` varchar(64) NOT NULL,
-#  `cost_value` float DEFAULT NULL,
-#  `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-#  `comment` varchar(1024) DEFAULT NULL,
-#  PRIMARY KEY (`cost_name`,`engine_name`,`device_type`)
-#) ENGINE=InnoDB DEFAULT CHARSET=utf8 STATS_PERSISTENT=0;''',value)
-#
-#
-#c.execute('select * from engine_cost')  
-
 
 
 class StockDayTableData(StockMysqlDB):
@@ -204,14 +207,16 @@ class StockDayTableData(StockMysqlDB):
         print(exist)
         self.__tablename__ = tablename
         if not exist:
-            #create unexist table
+            #create unexist table ,fault if the field is error then the default value must be set
+            #into the mysql table
             self._execute('''create table if not exists %s( \
             %s timestamp not null comment "tradetime", \
-            %s varchar(8) default 0 comment "tradeprice", \
-            %s varchar(8) default 0 comment "upprice", \
-            %s varchar(8) default 0 comment "volumn", \
-            %s varchar(8) default 0 comment "totalprice", \
+            %s float default 0 comment "tradeprice", \
+            %s float default 0 comment "upprice", \
+            %s int default 0 comment "volumn", \
+            %s int default 0 comment "totalprice", \
             %s varchar(9) comment "type",  \
+            %s smallint comment "page",  \
             primary key ( %s ) \
             )ENGINE=Innodb default charset=utf8;'''%(
             self.escape(tablename),
@@ -221,27 +226,28 @@ class StockDayTableData(StockMysqlDB):
             self.escape("成交量(手)"),
             self.escape("成交额(元)"),
             self.escape("性质"),
+            self.escape("page"),
             self.escape("成交时间")
-            ))            
-#            self._execute('''create table if not exists %s( \
-#            %s timestamp not null comment "tradetime", \
-#            %s float(8) default 0 comment "tradeprice", \
-#            %s float(8) default 0 comment "upprice", \
-#            %s int(8) default 0 comment "volumn", \
-#            %s int(8) default 0 comment "totalprice", \
-#            %s varchar(9) comment "type",  \
-#            primary key ( %s ) \
-#            )ENGINE=Innodb default charset=utf8;'''%(
-#            self.escape(tablename),
-#            self.escape("成交时间"),
-#            self.escape("成交价"),
-#            self.escape("价格变动"),
-#            self.escape("成交量(手)"),
-#            self.escape("成交额(元)"),
-#            self.escape("性质"),
-#            self.escape("成交时间")
-#            ))
-#        
+            ))
+    def record(self,stockname=None,day=None,page=None,starttime=None,endtime=None):
+#        tablename = tablename or self.__tablename__
+        if not self._existTable("record"):
+             self._execute('''create table if not exists %s( \
+            %s varchar(11) not null comment "the name of stock", \
+            %s date not null comment "insert day", \
+            %s smallint not null comment "insert page", \
+            %s time not null comment "starttime", \
+            %s time not null comment "endtime" \
+            )ENGINE=Innodb default charset=utf8;'''%(
+            self.escape("record"),
+            self.escape("stockname"),
+            self.escape("day"),
+            self.escape("page"),
+            self.escape("starttime"),
+            self.escape("endtime")
+            ))
+        self._insert2(tablename="record",stockname=stockname,day=day,page=page,starttime=starttime,endtime=endtime)
+        
         
 if __name__=="__main__":
 #    stockdb_single_ins = StockMysqlDB(host="localhost",db="sina_data")
@@ -255,22 +261,56 @@ if __name__=="__main__":
     
     
     import h5py as hp
+    import os
+    file = [x for x in os.walk("splitstockname_history")]
+    tablenames = [fi.replace(".hdf5","") for fi in file[0][2] if len(fi)<14]
     
-    tablename = "sh600513"
-    sst = StockDayTableData(tablename = tablename)
-    def readdays(tablename):
-        with hp.File("../%s.hdf5"%(tablename),"r+") as f:
-            return [{day:list(f[day].keys())} for day in f.keys()]
-    
-    days_pages = readdays(tablename)
-    for daydict in days_pages:
-        day = list(daydict.keys())[0]
-        pages = list(daydict.values())[0]
+    def insertinto_mysql(tablename):
+        sst = StockDayTableData(host="192.168.40.179",tablename = tablename)
+        def readdays(tablename):
+            with hp.File("splitstockname_history/%s.hdf5"%(tablename),"r+") as f:
+                return [{day:list(f[day].keys())} for day in f.keys()]
         
-        for page in pages:
-            dataframe = pd.read_hdf("../%s.hdf5"%tablename,"%s/%s"%(day,page))
-            dataframe["成交时间"]=dataframe["成交时间"].apply(lambda x:day+" "+x)
-            sst.insertDataFrame(dataframe=dataframe)
+        days_pages = readdays(tablename)
+        for daydict in days_pages:
+            day = list(daydict.keys())[0]
+            pages = list(daydict.values())[0]
+            for page in pages:
+                print("%s    ---day:%s,page:%s"%(tablename,day,page))
+                dataframe = pd.read_hdf("splitstockname_history/%s.hdf5"%tablename,"%s/%s"%(day,page))
+                
+                starttime = dataframe["成交时间"][len(dataframe["成交时间"])-1]
+                endtime = dataframe["成交时间"][0]
+                
+                if starttime > endtime:
+                    starttime,endtime = endtime,starttime
+                dataframe["成交时间"]=dataframe["成交时间"].apply(lambda x:day+" "+x)
+    #            dataframe["成交额(元)"]=dataframe["成交额(元)"].apply(lambda x:x.replace(",",""))
+                dataframe["成交额(元)"]=dataframe["成交额(元)"].apply(lambda x:x.replace(",",""))
+                dataframe["成交量(手)"]=dataframe["成交量(手)"].apply(lambda x:x.replace(",",""))
+                dataframe["page"] = page
+                sst.insertDataFrame(dataframe=dataframe)
+                sst.record(stockname=tablename,day=day,page=page,starttime=starttime,endtime=endtime)
+    
+    
+    import threadpool
+    task_pool = threadpool.ThreadPool(15)
+    #function 2
+    func_var = [([t],None) for t in tablenames]
+    requests = threadpool.makeRequests(insertinto_mysql, func_var)
+    [task_pool.putRequest(req) for req in requests]
+    task_pool.wait()
+    #function 1
+#    request_list = [threadpool.makeRequests(insertinto_mysql,[(t,None)]) for t in tablenames]
+#        #将每个任务放到线程池中，等待线程池中线程各自读取任务，然后进行处理，使用了map函数，不了解的可以去了解一下。  
+#    map(task_pool.putRequest,request_list)  
+#    #等待所有任务处理完成，则返回，如果没有处理完，则一直阻塞  
+#    task_pool.poll() 
+#    for tablename in tablenames:
+##        tablename = "sh600513"
+#        
+#        insertinto_mysql(tablename)
+        
         
 #    dataframe = pd.read_hdf("sh600513.hdf5","2018-01-29"+"/"+"2")
 #    
